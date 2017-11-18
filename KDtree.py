@@ -34,7 +34,8 @@ class KdTree(object):
 	__slots__ = ("n", "bounds")
 
 	def __init__(self, pts, bounds):
-		def nk2(split, exset):
+		def nk2(split, exset, tamanho):
+			#print("not " + str(exset) + " = " + str(not exset))
 			if not exset:
 				return None
 			exset.sort(key=itemgetter(split))
@@ -43,9 +44,15 @@ class KdTree(object):
 			while m + 1 < len(exset) and exset[m + 1][split] == d[split]:
 				m += 1
 
-			s2 = (split + 1) % len(d)  # cycle coordinates
-			return KdNode(d, split, nk2(s2, exset[:m]), nk2(s2, exset[m + 1:]))
-		self.n = nk2(0, pts)
+			s2 = (split + 1) % tamanho  # cycle coordinates
+			return KdNode(d, split, nk2(s2, exset[:m], tamanho), nk2(s2, exset[m + 1:], tamanho))
+		
+		#O ultimo elemento de cada amotra e seu indice
+		for i in range(len(pts)):
+			pts[i][-1] = i
+		#Se tem amostras, insere as
+		if pts:
+			self.n = nk2(0, pts, len(pts[0]) - 1)
 		self.bounds = bounds
 
 T3 = namedtuple("T3", "nearest dist_sqd nodes_visited")
@@ -101,10 +108,11 @@ def find_nearest(k, t, p):
 def show_nearest(k, heading, kd, p):
 	print(heading + ":")
 	print("Point:            ", p)
-	print(find_nearest(k, KdTree([], Orthotope([0, 0], [10, 10])), p))
+	#print(find_nearest(k, KdTree([], Orthotope([0, 0], [10, 10])), p))
 	n = find_nearest(k, kd, p)
 	print(n)
-	print("Nearest neighbor: ", n.nearest)
+	print("Nearest neighbor: ", n.nearest[0:-1])
+	print("Indice + proximo: ", n.nearest[-1])
 	print("Distance:         ", sqrt(n.dist_sqd))
 	print("Nodes visited:    ", n.nodes_visited, "\n")
 
@@ -112,5 +120,5 @@ if __name__ == "__main__":
 	seed(1)
 	P = lambda *coords: list(coords)
 	#print(P(5, 5))
-	tree = KdTree([P(2, 3), P(5, 4), P(9, 6), P(4, 7), P(8, 1), P(7, 2), P(0, 0), P(10, 10)], Orthotope(P(0, 0), P(10, 10)))
+	tree = KdTree([P(2, 3, 0), P(5, 4, 0), P(9, 6, 0), P(4, 7, 0), P(8, 1, 0), P(7, 2, 0), P(0, 0, 0), P(10, 10, 0)], Orthotope(P(0, 0), P(10, 10)))
 	show_nearest(2, "Wikipedia example data", tree, P(10, 8))
