@@ -43,6 +43,7 @@ def gerar_histograma(lbps, lbpMax):
 	histograma = np.zeros(lbpMax + 1, dtype=int)
 	for lbp in lbps:
 		histograma[int(lbp)] += 1
+	return histograma
 
 def num_blocos():
 	return ((rows - b) // espaco + 1) * ((columns - b) // espaco + 1) 
@@ -125,6 +126,9 @@ def identificar2(vA, vB, vC):
 	return (saidaA, saidaB, saidaC, saidaD)
 
 def editar(img, blocos):
+	'''
+	Deixa todos os blocos na imagem copiados pretos
+	'''
 	i = 0
 	saida = np.copy(img)
 	for (r, c) in gerar_blocos(img):
@@ -134,6 +138,9 @@ def editar(img, blocos):
 	return saida
 
 def editar2(img, blocosA, blocosB):
+	'''
+	Deixa um conjunto de blocos na imagem azul e outro verde
+	'''
 	i = 0
 	saida = np.copy(img)
 	for (r, c) in gerar_blocos(img):
