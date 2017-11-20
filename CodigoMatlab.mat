@@ -1,8 +1,0 @@
-img = imread('teste 3.bmp')
-cinza = rgb2gray(img)
-
-
-figure
-imshow(img)
-figure
-imshow(cinza)
