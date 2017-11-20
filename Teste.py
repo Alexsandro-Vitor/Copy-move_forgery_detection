@@ -13,6 +13,17 @@ def rgb_para_cinza(img):
 	b,g,r = cv2.split(img)
 	return (b // 3 + g // 3 + r // 3)
 
+def diferenca(imgA, imgB):
+	'''
+	Checa a diferenca entre duas imagens
+	'''
+	for r in range(rows):
+		for c in range(columns):
+			if imgA[r, c, 0] != imgB[r, c, 0] or imgA[r, c, 1] != imgB[r, c, 1] or imgA[r, c, 2] != imgB[r, c, 2]:
+				orig[r, c] = [255, 255, 255]
+			else :
+				orig[r, c] = [0, 0, 0]
+
 def gerar_blocos(img):
 	'''
 	Cria os blocos para calcular o histograma de cada um. Os blocos sao representados apenas pela linha e coluna do pixel mais acima e a esquerda do bloco.
@@ -88,12 +99,17 @@ def editar(imgA, blocosA, blocosB):
 	return (imgA, imgB)
 
 tempo = time.time()
-img = cv2.imread("Teste 3.bmp")
+orig = cv2.imread("Original.bmp")
+img = cv2.imread("Modificado.bmp")
 cinza = rgb_para_cinza(img)
 b = 3
 espaco = 3
 (rows, columns) = cinza.shape
 print("Experimento com b = " + str(b) + ", espaco = " + str(espaco))
+
+tempoDiff = time.time()
+diferenca(orig, img)
+print("Tempo de calculo da diferenca real: " + str(time.time() - tempoDiff))
 
 tempoLBP = time.time()
 lbpA = feature.local_binary_pattern(cinza, 8, 1, method="nri_uniform")
@@ -138,6 +154,6 @@ print("Tempo de Execucao: " + str(time.time() - tempo))
 
 cv2.imshow("Imagem A", imgA)
 cv2.imshow("Imagem B", imgB)
-cv2.imshow("Cinza", cinza)
+cv2.imshow("Diferenca real", orig)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
