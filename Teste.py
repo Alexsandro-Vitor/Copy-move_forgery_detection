@@ -6,6 +6,8 @@ import time
 from skimage import feature
 from sklearn.neighbors import KNeighborsClassifier
 
+from tkinter.filedialog import askopenfilename
+
 def rgb_para_cinza(img):
 	'''
 	Converte a imagem de RGB para escala de cinza. Eu uso no lugar da funcao do opencv porque ela da pesos diferentes às cores.
@@ -17,12 +19,12 @@ def diferenca(imgA, imgB):
 	'''
 	Checa a diferenca entre duas imagens
 	'''
+	diff = np.zeros((rows, columns))
 	for r in range(rows):
 		for c in range(columns):
 			if imgA[r, c, 0] != imgB[r, c, 0] or imgA[r, c, 1] != imgB[r, c, 1] or imgA[r, c, 2] != imgB[r, c, 2]:
-				orig[r, c] = [255, 255, 255]
-			else :
-				orig[r, c] = [0, 0, 0]
+				diff[r, c] = 255
+	return diff
 
 def gerar_blocos(img):
 	'''
@@ -72,10 +74,12 @@ def knn(vetores, pixelsBloco):
 	saida = np.zeros(len(vetores), dtype=int)
 
 	neigh = KNeighborsClassifier(n_neighbors=1)
+	indices = np.array([x for x in range(len(vetores))])
+	neigh.fit(vetores, indices)
 	for i in range(len(vetores)):
 		vetor = np.copy(vetores[i])
-		vetores[i] = np.array([100 for _ in vetores[i]])
-		neigh.fit(vetores, np.array([x for x in range(len(vetores))]))
+		vetores[i] = np.array([1000 for _ in vetores[i]])
+		#neigh.fit(vetores, np.array([x for x in range(len(vetores))]))
 		saida[i] = neigh.predict([vetor])
 		vetores[i] = vetor
 	
@@ -151,9 +155,50 @@ def editar2(img, blocosA, blocosB):
 		i += 1
 	return saida
 
+def precisao_e_recall(teste):
+	truePosA = 0
+	falsePosA = 0
+	falseNegA = 0
+	truePosB = 0
+	falsePosB = 0
+	falseNegB = 0
+	for r in range(rows):
+		for c in range(columns):
+			if teste[r, c, 0] == 255 and teste[r, c, 1] == 0 and teste[r, c, 2] == 0:
+				if orig[r, c] == 255:
+					truePosA += 1
+					falseNegB += 1
+				else:
+					falsePosA += 1
+			elif teste[r, c, 0] == 0 and teste[r, c, 1] == 255 and teste[r, c, 2] == 0:
+				if orig[r, c] == 255:
+					falseNegA += 1
+					truePosB += 1
+				else:
+					falsePosB += 1
+			elif orig[r, c] == 255:
+				falseNegA += 1
+				falseNegB += 1
+	saidaA = (truePosA, falsePosA, falseNegA)
+	saidaB = (truePosB, falsePosB, falseNegB)
+	if truePosA > truePosB:
+		return saidaA
+	elif truePosA < truePosB:
+		return saidaB
+	elif falsePosA < falsePosB:
+		return saidaA
+	else:
+		return saidaB
+
+nomeOrig = askopenfilename(filetypes=[("all files","*"),("Bitmap Files","*.bmp; *.dib"), ("JPEG", "*.jpg; *.jpe; *.jpeg; *.jfif"), ("PNG", "*.png"), ("TIFF", "*.tiff; *.tif")])
+nomeMod = askopenfilename(filetypes=[("all files","*"),("Bitmap Files","*.bmp; *.dib"), ("JPEG", "*.jpg; *.jpe; *.jpeg; *.jfif"), ("PNG", "*.png"), ("TIFF", "*.tiff; *.tif")])
+nomeOrig = nomeOrig[nomeOrig.find("/Imagens/")+1:]
+nomeMod = nomeMod[nomeMod.find("/Imagens/")+1:]
+
 tempo = time.time()
-orig = cv2.imread("Original.bmp")
-img = cv2.imread("Original.bmp")
+orig = cv2.imread(nomeOrig)
+img = cv2.imread(nomeMod)
+print(nomeOrig, nomeMod)
 cinza = rgb_para_cinza(img)
 b = 3
 espaco = 3
@@ -161,7 +206,7 @@ espaco = 3
 print("Experimento com b = " + str(b) + ", espaco = " + str(espaco))
 
 tempoDiff = time.time()
-diferenca(orig, img)
+orig = diferenca(orig, img)
 print("Tempo de calculo da diferenca real: " + str(time.time() - tempoDiff))
 
 tempoLBP = time.time()
@@ -198,9 +243,26 @@ imgA = editar(img, idA)
 imgB = editar(img, idB)
 imgC = editar(img, idC)
 imgD = editar(img, idD)
-imgA2 = editar2(img, idA2, idB2)
-imgB2 = editar2(img, idC2, idD2)
+imgA2 = editar2(np.zeros(img.shape), idA2, idB2)
+imgB2 = editar2(np.zeros(img.shape), idC2, idD2)
 print("Tempo de edicao: " + str(time.time() - tempoEdit))
+
+print("COM 2 COINCIDENCIAS:")
+(truePos, falsePos, falseNeg) = precisao_e_recall(imgA2)
+print("Verdadeiros positivos: " + str(truePos))
+print("Falsos positivos: " + str(falsePos))
+print("Falsos negativos: " + str(falseNeg))
+if (truePos + falseNeg):
+	print("Recall = " + str(truePos / (truePos + falseNeg)))
+print("Precisao = " + str(truePos / (truePos + falsePos)))
+print("COM 3 COINCIDENCIAS:")
+(truePos, falsePos, falseNeg) = precisao_e_recall(imgB2)
+print("Verdadeiros positivos: " + str(truePos))
+print("Falsos positivos: " + str(falsePos))
+print("Falsos negativos: " + str(falseNeg))
+if (truePos + falseNeg):
+	print("Recall = " + str(truePos / (truePos + falseNeg)))
+print("Precisao = " + str(truePos / (truePos + falsePos)))
 
 print("Tempo de Execucao: " + str(time.time() - tempo))
 
