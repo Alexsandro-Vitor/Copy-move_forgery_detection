@@ -1,10 +1,10 @@
 import numpy as np
 import cv2
 import math
-import KDtree as kd
 import time
 from skimage import feature
 from sklearn.neighbors import KNeighborsClassifier
+from openpyxl import load_workbook
 
 from tkinter.filedialog import askopenfilename
 
@@ -129,18 +129,6 @@ def identificar2(vA, vB, vC):
 				saidaD[vA[i]] = True
 	return (saidaA, saidaB, saidaC, saidaD)
 
-def editar(img, blocos):
-	'''
-	Deixa todos os blocos na imagem copiados pretos
-	'''
-	i = 0
-	saida = np.copy(img)
-	for (r, c) in gerar_blocos(img):
-		if blocos[i]:
-			saida[r:r+b, c:c+b] = [0, 0, 0]
-		i += 1
-	return saida
-
 def editar2(img, blocosA, blocosB):
 	'''
 	Deixa um conjunto de blocos na imagem azul e outro verde
@@ -192,16 +180,16 @@ def precisao_e_recall(teste):
 
 nomeOrig = askopenfilename(filetypes=[("all files","*"),("Bitmap Files","*.bmp; *.dib"), ("JPEG", "*.jpg; *.jpe; *.jpeg; *.jfif"), ("PNG", "*.png"), ("TIFF", "*.tiff; *.tif")])
 nomeMod = askopenfilename(filetypes=[("all files","*"),("Bitmap Files","*.bmp; *.dib"), ("JPEG", "*.jpg; *.jpe; *.jpeg; *.jfif"), ("PNG", "*.png"), ("TIFF", "*.tiff; *.tif")])
-nomeOrig = nomeOrig[nomeOrig.find("/Imagens/")+1:]
-nomeMod = nomeMod[nomeMod.find("/Imagens/")+1:]
+nomeOrig = nomeOrig[nomeOrig.find("/Imagens/") + 1:]
+nomeMod = nomeMod[nomeMod.find("/Imagens/") + 1:]
 
 tempo = time.time()
 orig = cv2.imread(nomeOrig)
 img = cv2.imread(nomeMod)
 print(nomeOrig, nomeMod)
 cinza = rgb_para_cinza(img)
-b = 3
-espaco = 3
+b = 10
+espaco = 1
 (rows, columns) = cinza.shape
 print("Experimento com b = " + str(b) + ", espaco = " + str(espaco))
 
@@ -234,44 +222,66 @@ print("Tempo de calculo do KNN C: " + str(time.time() - tempoKnnC))
 print("Tempo de calculo do KNN: " + str(time.time() - tempoKnn))
 
 tempoId = time.time()
-(idA, idB, idC, idD) = identificar(proximosA, proximosB, proximosC)
-(idA2, idB2, idC2, idD2) = identificar2(proximosA, proximosB, proximosC)
+(idA2, idB2, idA3, idB3) = identificar2(proximosA, proximosB, proximosC)
 print("Tempo de identificacao de copias: " + str(time.time() - tempoId))
 
 tempoEdit = time.time()
-imgA = editar(img, idA)
-imgB = editar(img, idB)
-imgC = editar(img, idC)
-imgD = editar(img, idD)
-imgA2 = editar2(np.zeros(img.shape), idA2, idB2)
-imgB2 = editar2(np.zeros(img.shape), idC2, idD2)
+img2 = editar2(np.zeros(img.shape), idA2, idB2)
+img3 = editar2(np.zeros(img.shape), idA3, idB3)
 print("Tempo de edicao: " + str(time.time() - tempoEdit))
 
 print("COM 2 COINCIDENCIAS:")
-(truePos, falsePos, falseNeg) = precisao_e_recall(imgA2)
+(truePos, falsePos, falseNeg) = precisao_e_recall(img2)
 print("Verdadeiros positivos: " + str(truePos))
 print("Falsos positivos: " + str(falsePos))
 print("Falsos negativos: " + str(falseNeg))
 if (truePos + falseNeg):
-	print("Recall = " + str(truePos / (truePos + falseNeg)))
-print("Precisao = " + str(truePos / (truePos + falsePos)))
+	recall2 = truePos / (truePos + falseNeg)
+	print("Recall = " + str(recall2))
+if (truePos + falsePos):
+	precisao2 = truePos / (truePos + falsePos)
+	print("Precisao = " + str(precisao2))
+
 print("COM 3 COINCIDENCIAS:")
-(truePos, falsePos, falseNeg) = precisao_e_recall(imgB2)
+(truePos, falsePos, falseNeg) = precisao_e_recall(img3)
 print("Verdadeiros positivos: " + str(truePos))
 print("Falsos positivos: " + str(falsePos))
 print("Falsos negativos: " + str(falseNeg))
 if (truePos + falseNeg):
-	print("Recall = " + str(truePos / (truePos + falseNeg)))
-print("Precisao = " + str(truePos / (truePos + falsePos)))
+	recall3 = truePos / (truePos + falseNeg)
+	print("Recall = " + str(recall3))
+if (truePos + falsePos):
+	precisao3 = truePos / (truePos + falsePos)
+	print("Precisao = " + str(precisao3))
 
 print("Tempo de Execucao: " + str(time.time() - tempo))
 
-cv2.imshow("Copia A - min. 2", imgA)
-cv2.imshow("Copia B - min. 2", imgB)
-cv2.imshow("Copia A - min. 3", imgC)
-cv2.imshow("Copia B - min. 3", imgD)
-cv2.imshow("Copia e Original - min. 2", imgA2)
-cv2.imshow("Copia e Original - min. 3", imgB2)
+cv2.imshow("Copia e Original - min. 2", img2)
+cv2.imshow("Copia e Original - min. 3", img3)
 cv2.imshow("Diferenca real", orig)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+numTeste = int(nomeOrig.replace("Imagens/Original ", "")[:-4])
+xlsx = load_workbook("Resultados.xlsx")
+if b != 3:
+	print("Este teste nao sera salvo")
+elif nomeOrig != nomeMod:
+	cv2.imwrite(nomeOrig.replace("Original", "Diferenca2Coincidencias"), img2)
+	cv2.imwrite(nomeOrig.replace("Original", "Diferenca3Coincidencias"), img3)
+	cv2.imwrite(nomeOrig.replace("Original", "Diferenca Real"), orig)
+
+	planilha = xlsx["Sheet1"]
+	planilha.cell(row = numTeste + 2, column = 1, value = numTeste)
+	planilha.cell(row = numTeste + 2, column = 2, value = recall2)
+	planilha.cell(row = numTeste + 2, column = 3, value = precisao2)
+	planilha.cell(row = numTeste + 2, column = 4, value = recall3)
+	planilha.cell(row = numTeste + 2, column = 5, value = precisao3)
+else:
+	cv2.imwrite(nomeOrig.replace("Original", "Controle2Coincidencias"), img2)
+	cv2.imwrite(nomeOrig.replace("Original", "Controle3Coincidencias"), img3)
+	
+	planilha = xlsx["Sheet2"]
+	planilha.cell(row = numTeste + 2, column = 1, value = numTeste)
+	planilha.cell(row = numTeste + 2, column = 2, value = falsePos)
+xlsx.save("Resultados.xlsx")
