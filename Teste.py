@@ -47,8 +47,14 @@ def gerar_histograma(lbps, lbpMax):
 		histograma[int(lbp)] += 1
 	return histograma
 
+def num_blocos_linha():
+	return (columns - b) // espaco + 1
+
+def num_blocos_coluna():
+	return (rows - b) // espaco + 1
+
 def num_blocos():
-	return ((rows - b) // espaco + 1) * ((columns - b) // espaco + 1) 
+	return num_blocos_linha() * num_blocos_coluna() 
 
 def gerar_histograma_blocos(img, lbps, lbpMax):
 	'''
@@ -134,13 +140,42 @@ def editar2(img, blocosA, blocosB):
 	Deixa um conjunto de blocos na imagem azul e outro verde
 	'''
 	i = 0
-	saida = np.copy(img)
+	saida = np.zeros((num_blocos_coluna(), num_blocos_linha(), 3))
 	for (r, c) in gerar_blocos(img):
 		if blocosA[i]:
-			saida[r:r+b, c:c+b] = [255, 0, 0]
+			saida[r // espaco, c // espaco] = [255, 0, 0]
 		if blocosB[i]:
-			saida[r:r+b, c:c+b] = [0, 255, 0]
+			saida[r // espaco, c // espaco] = [0, 255, 0]
 		i += 1
+	return saida
+
+def indice_bloco(r, c):
+	return r * num_blocos_linha() // espaco + c // espaco
+	
+def editar(img, blocosA, blocosB):
+	saida = np.copy(img)
+	for (r, c) in gerar_blocos(img):
+		if blocosA[indice_bloco(r, c)]:
+			saida[r:r+b, c:c+b] = [255, 0, 0]
+		if blocosB[indice_bloco(r, c)]:
+			saida[r:r+b, c:c+b] = [0, 255, 0]
+	return saida
+
+def checar_25(blocos, row, col):
+	for r in range(row // espaco - 2, row // espaco + 3):
+		for c in range(col // espaco - 1, col // espaco + 2):
+			if r >= 0 and r < num_blocos_coluna() and c >= 0 and c < num_blocos_coluna():
+				if not blocos[indice_bloco(r, c)]:
+					return False
+	return True
+
+def editar3(img, blocosA, blocosB):
+	saida = np.copy(img)
+	for (r, c) in gerar_blocos(img):
+		if blocosA[indice_bloco(r, c)] and checar_25(blocosA, r, c):
+			saida[r:r+b, c:c+b] = [255, 0, 0]
+		if blocosB[indice_bloco(r, c)] and checar_25(blocosB, r, c):
+			saida[r:r+b, c:c+b] = [0, 255, 0]
 	return saida
 
 def precisao_e_recall(teste):
@@ -188,8 +223,8 @@ orig = cv2.imread(nomeOrig)
 img = cv2.imread(nomeMod)
 print(nomeOrig, nomeMod)
 cinza = rgb_para_cinza(img)
-b = 10
-espaco = 1
+b = 3
+espaco = 3
 (rows, columns) = cinza.shape
 print("Experimento com b = " + str(b) + ", espaco = " + str(espaco))
 
@@ -226,8 +261,13 @@ tempoId = time.time()
 print("Tempo de identificacao de copias: " + str(time.time() - tempoId))
 
 tempoEdit = time.time()
-img2 = editar2(np.zeros(img.shape), idA2, idB2)
-img3 = editar2(np.zeros(img.shape), idA3, idB3)
+img2 = editar(np.zeros(img.shape), idA2, idB2)
+img3 = editar(np.zeros(img.shape), idA3, idB3)
+# img2B = editar2(np.zeros(img.shape), idA2, idB2)
+# img3B = editar2(np.zeros(img.shape), idA3, idB3)
+# img2C = editar3(np.zeros(img.shape), idA2, idB2)
+# img3C = editar3(np.zeros(img.shape), idA3, idB3)
+
 print("Tempo de edicao: " + str(time.time() - tempoEdit))
 
 print("COM 2 COINCIDENCIAS:")
@@ -254,10 +294,38 @@ if (truePos + falsePos):
 	precisao3 = truePos / (truePos + falsePos)
 	print("Precisao = " + str(precisao3))
 
+# print("COM 2 COINCIDENCIAS:")
+# (truePos, falsePos, falseNeg) = precisao_e_recall(img2C)
+# print("Verdadeiros positivos: " + str(truePos))
+# print("Falsos positivos: " + str(falsePos))
+# print("Falsos negativos: " + str(falseNeg))
+# if (truePos + falseNeg):
+	# recall2 = truePos / (truePos + falseNeg)
+	# print("Recall = " + str(recall2))
+# if (truePos + falsePos):
+	# precisao2 = truePos / (truePos + falsePos)
+	# print("Precisao = " + str(precisao2))
+
+# print("COM 3 COINCIDENCIAS:")
+# (truePos, falsePos, falseNeg) = precisao_e_recall(img3C)
+# print("Verdadeiros positivos: " + str(truePos))
+# print("Falsos positivos: " + str(falsePos))
+# print("Falsos negativos: " + str(falseNeg))
+# if (truePos + falseNeg):
+	# recall3 = truePos / (truePos + falseNeg)
+	# print("Recall = " + str(recall3))
+# if (truePos + falsePos):
+	# precisao3 = truePos / (truePos + falsePos)
+	# print("Precisao = " + str(precisao3))
+
 print("Tempo de Execucao: " + str(time.time() - tempo))
 
 cv2.imshow("Copia e Original - min. 2", img2)
 cv2.imshow("Copia e Original - min. 3", img3)
+# cv2.imshow("2a versao", img2B)
+# cv2.imshow("2a versao - min. 3", img3B)
+# cv2.imshow("3a versao", img2C)
+# cv2.imshow("3a versao - min. 3", img3C)
 cv2.imshow("Diferenca real", orig)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
