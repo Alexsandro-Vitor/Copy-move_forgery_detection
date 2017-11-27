@@ -85,32 +85,10 @@ def knn(vetores, pixelsBloco):
 	for i in range(len(vetores)):
 		vetor = np.copy(vetores[i])
 		vetores[i] = np.array([1000 for _ in vetores[i]])
-		#neigh.fit(vetores, np.array([x for x in range(len(vetores))]))
 		saida[i] = neigh.predict([vetor])
 		vetores[i] = vetor
 	
 	return saida
-
-def identificar(vA, vB, vC):
-	'''
-	Identifica os blocos copiados e nao copiados
-	'''
-	saidaA = np.zeros(len(vA), dtype=bool)
-	saidaB = np.zeros(len(vA), dtype=bool)
-	saidaC = np.zeros(len(vA), dtype=bool)
-	saidaD = np.zeros(len(vA), dtype=bool)
-	
-	for i in range(len(vA)):
-		if vA[i] == vB[i] or vB[i] == vC[i] or vC[i] == vA[i]:
-			saidaA[i] = True
-			if vA[i] == vB[i]:
-				saidaB[vA[i]] = True
-			else:
-				saidaB[vC[i]] = True
-		if vA[i] == vB[i] and vA[i] == vC[i]:
-			saidaC[i] = True
-			saidaD[vA[i]] = True
-	return (saidaA, saidaB, saidaC, saidaD)
 
 def identificar2(vA, vB, vC):
 	'''
@@ -135,9 +113,27 @@ def identificar2(vA, vB, vC):
 				saidaD[vA[i]] = True
 	return (saidaA, saidaB, saidaC, saidaD)
 
-def editar2(img, blocosA, blocosB):
+def indice_bloco(r, c):
+	'''
+	Obtem o indice de um bloco no array de blocos
+	'''
+	return r * num_blocos_linha() // espaco + c // espaco
+	
+def editar(img, blocosA, blocosB):
 	'''
 	Deixa um conjunto de blocos na imagem azul e outro verde
+	'''
+	saida = np.copy(img)
+	for (r, c) in gerar_blocos(img):
+		if blocosA[indice_bloco(r, c)]:
+			saida[r:r+b, c:c+b] = [255, 0, 0]
+		if blocosB[indice_bloco(r, c)]:
+			saida[r:r+b, c:c+b] = [0, 255, 0]
+	return saida
+
+def editar_blocos(img, blocosA, blocosB):
+	'''
+	Gera uma figura com os blocos atribuidos a cada grupo 
 	'''
 	i = 0
 	saida = np.zeros((num_blocos_coluna(), num_blocos_linha(), 3))
@@ -149,34 +145,33 @@ def editar2(img, blocosA, blocosB):
 		i += 1
 	return saida
 
-def indice_bloco(r, c):
-	return r * num_blocos_linha() // espaco + c // espaco
-	
-def editar(img, blocosA, blocosB):
-	saida = np.copy(img)
-	for (r, c) in gerar_blocos(img):
-		if blocosA[indice_bloco(r, c)]:
-			saida[r:r+b, c:c+b] = [255, 0, 0]
-		if blocosB[indice_bloco(r, c)]:
-			saida[r:r+b, c:c+b] = [0, 255, 0]
-	return saida
-
-def checar_25(blocos, row, col):
-	for r in range(row // espaco - 2, row // espaco + 3):
-		for c in range(col // espaco - 1, col // espaco + 2):
-			if r >= 0 and r < num_blocos_coluna() and c >= 0 and c < num_blocos_coluna():
-				if not blocos[indice_bloco(r, c)]:
-					return False
+def checar_vizinhos(blocos, row, col, largura):
+	'''
+	Checa se os vizinhos de um pixel sao do grupo dele
+	'''
+	for r in range(row // espaco - largura + 1, row // espaco + largura):
+		for c in range(col // espaco - largura + 1, col // espaco + largura):
+			if r < 0 or r >= num_blocos_coluna() or c < 0 and c >= num_blocos_coluna():
+				return False
+			if not blocos[indice_bloco(r, c)]:
+				return False
 	return True
 
-def editar3(img, blocosA, blocosB):
+def editar_filtrado(img, blocosA, blocosB):
+	'''
+	Gera uma imagem filtrada, com apenas os blocos cujos vizinhos sao do mesmo grupo azul ou verde. Tambem da um veredito se a imagem tem copias ou nao.
+	'''
 	saida = np.copy(img)
+	temAzul = False
+	temVerde = False
 	for (r, c) in gerar_blocos(img):
-		if blocosA[indice_bloco(r, c)] and checar_25(blocosA, r, c):
+		if blocosA[indice_bloco(r, c)] and checar_vizinhos(blocosA, r, c, 3):
 			saida[r:r+b, c:c+b] = [255, 0, 0]
-		if blocosB[indice_bloco(r, c)] and checar_25(blocosB, r, c):
+			temAzul = True
+		if blocosB[indice_bloco(r, c)] and checar_vizinhos(blocosB, r, c, 3):
 			saida[r:r+b, c:c+b] = [0, 255, 0]
-	return saida
+			temVerde = True
+	return (saida, temAzul and temVerde)
 
 def precisao_e_recall(teste):
 	truePosA = 0
@@ -223,133 +218,142 @@ orig = cv2.imread(nomeOrig)
 img = cv2.imread(nomeMod)
 print(nomeOrig, nomeMod)
 cinza = rgb_para_cinza(img)
-b = 3
-espaco = 3
+b = 10
+espaco = 1
 (rows, columns) = cinza.shape
 print("Experimento com b = " + str(b) + ", espaco = " + str(espaco))
 
-tempoDiff = time.time()
+#Calculando a diferenca entre o original e a copia
+tempoEtapa = time.time()
 orig = diferenca(orig, img)
-print("Tempo de calculo da diferenca real: " + str(time.time() - tempoDiff))
+print("Tempo de calculo da diferenca real: " + str(time.time() - tempoEtapa))
 
-tempoLBP = time.time()
+#Calculo de LBPs
+tempoEtapa = time.time()
 lbpA = feature.local_binary_pattern(cinza, 8, 1, method="nri_uniform")
 lbpB = feature.local_binary_pattern(cinza, 12, 2, method="nri_uniform")
 lbpC = feature.local_binary_pattern(cinza, 16, 2, method="uniform")
-print("Tempo de calculo do LBP: " + str(time.time() - tempoLBP))
+print("Tempo de calculo do LBP: " + str(time.time() - tempoEtapa))
 
-tempoHist = time.time()
+#Geracao de histogramas
+tempoEtapa = time.time()
 histogramaA = gerar_histograma_blocos(cinza, lbpA, 8 * (8-1) + 2)
 histogramaB = gerar_histograma_blocos(cinza, lbpB, 12 * (12-1) + 2)
 histogramaC = gerar_histograma_blocos(cinza, lbpC, 16 + 1)
-print("Tempo de geracao dos histogramas: " + str(time.time() - tempoHist))
+print("Tempo de geracao dos histogramas: " + str(time.time() - tempoEtapa))
 print("Num. de histogramas: " + str(num_blocos()))
 
-tempoKnn = time.time()
+#Obtencao dos blocos mais parecidos
+tempoEtapa = time.time()
 proximosA = knn(histogramaA, b*b)
-print("Tempo de calculo do KNN A: " + str(time.time() - tempoKnn))
+print("Tempo de calculo do KNN A: " + str(time.time() - tempoEtapa))
 tempoKnnB = time.time()
 proximosB = knn(histogramaB, b*b)
 print("Tempo de calculo do KNN B: " + str(time.time() - tempoKnnB))
 tempoKnnC = time.time()
 proximosC = knn(histogramaC, b*b)
 print("Tempo de calculo do KNN C: " + str(time.time() - tempoKnnC))
-print("Tempo de calculo do KNN: " + str(time.time() - tempoKnn))
+print("Tempo de calculo do KNN: " + str(time.time() - tempoEtapa))
 
-tempoId = time.time()
+#Obtencao das regioes original e copiada
+tempoEtapa = time.time()
 (idA2, idB2, idA3, idB3) = identificar2(proximosA, proximosB, proximosC)
-print("Tempo de identificacao de copias: " + str(time.time() - tempoId))
+print("Tempo de identificacao de copias: " + str(time.time() - tempoEtapa))
 
-tempoEdit = time.time()
+#Geracao de imagens
+tempoEtapa = time.time()
 img2 = editar(np.zeros(img.shape), idA2, idB2)
 img3 = editar(np.zeros(img.shape), idA3, idB3)
-# img2B = editar2(np.zeros(img.shape), idA2, idB2)
-# img3B = editar2(np.zeros(img.shape), idA3, idB3)
-# img2C = editar3(np.zeros(img.shape), idA2, idB2)
-# img3C = editar3(np.zeros(img.shape), idA3, idB3)
+img2B = editar_blocos(np.zeros(img.shape), idA2, idB2)
+img3B = editar_blocos(np.zeros(img.shape), idA3, idB3)
+(img2C, copia2) = editar_filtrado(np.zeros(img.shape), idA2, idB2)
+(img3C, copia3) = editar_filtrado(np.zeros(img.shape), idA3, idB3)
+print("Tempo de edicao: " + str(time.time() - tempoEtapa))
 
-print("Tempo de edicao: " + str(time.time() - tempoEdit))
-
+#Calculo do desempenho
+tempoEtapa = time.time()
 print("COM 2 COINCIDENCIAS:")
-(truePos, falsePos, falseNeg) = precisao_e_recall(img2)
+(truePos, falsePos2, falseNeg) = precisao_e_recall(img2C)
 print("Verdadeiros positivos: " + str(truePos))
-print("Falsos positivos: " + str(falsePos))
+print("Falsos positivos: " + str(falsePos2))
 print("Falsos negativos: " + str(falseNeg))
 if (truePos + falseNeg):
 	recall2 = truePos / (truePos + falseNeg)
 	print("Recall = " + str(recall2))
-if (truePos + falsePos):
-	precisao2 = truePos / (truePos + falsePos)
+precisao2 = 0
+if (truePos + falsePos2):
+	precisao2 = truePos / (truePos + falsePos2)
 	print("Precisao = " + str(precisao2))
 
 print("COM 3 COINCIDENCIAS:")
-(truePos, falsePos, falseNeg) = precisao_e_recall(img3)
+(truePos, falsePos3, falseNeg) = precisao_e_recall(img3C)
 print("Verdadeiros positivos: " + str(truePos))
-print("Falsos positivos: " + str(falsePos))
+print("Falsos positivos: " + str(falsePos3))
 print("Falsos negativos: " + str(falseNeg))
 if (truePos + falseNeg):
 	recall3 = truePos / (truePos + falseNeg)
 	print("Recall = " + str(recall3))
-if (truePos + falsePos):
-	precisao3 = truePos / (truePos + falsePos)
+precisao3 = 0
+if (truePos + falsePos3):
+	precisao3 = truePos / (truePos + falsePos3)
 	print("Precisao = " + str(precisao3))
-
-# print("COM 2 COINCIDENCIAS:")
-# (truePos, falsePos, falseNeg) = precisao_e_recall(img2C)
-# print("Verdadeiros positivos: " + str(truePos))
-# print("Falsos positivos: " + str(falsePos))
-# print("Falsos negativos: " + str(falseNeg))
-# if (truePos + falseNeg):
-	# recall2 = truePos / (truePos + falseNeg)
-	# print("Recall = " + str(recall2))
-# if (truePos + falsePos):
-	# precisao2 = truePos / (truePos + falsePos)
-	# print("Precisao = " + str(precisao2))
-
-# print("COM 3 COINCIDENCIAS:")
-# (truePos, falsePos, falseNeg) = precisao_e_recall(img3C)
-# print("Verdadeiros positivos: " + str(truePos))
-# print("Falsos positivos: " + str(falsePos))
-# print("Falsos negativos: " + str(falseNeg))
-# if (truePos + falseNeg):
-	# recall3 = truePos / (truePos + falseNeg)
-	# print("Recall = " + str(recall3))
-# if (truePos + falsePos):
-	# precisao3 = truePos / (truePos + falsePos)
-	# print("Precisao = " + str(precisao3))
-
+print("Tempo para calcular desempenho: " + str(time.time() - tempoEtapa))
+	
 print("Tempo de Execucao: " + str(time.time() - tempo))
 
+print("Veredito de 2 coincidencias: ", end="")
+if (copia2):
+	print("Tem copia")
+else:
+	print("Nao tem copia")
+print("Veredito de 3 coincidencias: ", end="")
+if (copia3):
+	print("Tem copia")
+else:
+	print("Nao tem copia")
+
+#Exibicao das imagens
 cv2.imshow("Copia e Original - min. 2", img2)
 cv2.imshow("Copia e Original - min. 3", img3)
-# cv2.imshow("2a versao", img2B)
-# cv2.imshow("2a versao - min. 3", img3B)
-# cv2.imshow("3a versao", img2C)
-# cv2.imshow("3a versao - min. 3", img3C)
+cv2.imshow("Classificacao dos blocos - min. 2", img2B)
+cv2.imshow("Classificacao dos blocos - min. 3", img3B)
+cv2.imshow("Filtragem de ruido - min. 2", img2C)
+cv2.imshow("Filtragem de ruido - min. 3", img3C)
 cv2.imshow("Diferenca real", orig)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
-numTeste = int(nomeOrig.replace("Imagens/Original ", "")[:-4])
+#Gravacao dos resultados
 xlsx = load_workbook("Resultados.xlsx")
-if b != 3:
-	print("Este teste nao sera salvo")
-elif nomeOrig != nomeMod:
-	cv2.imwrite(nomeOrig.replace("Original", "Diferenca2Coincidencias"), img2)
-	cv2.imwrite(nomeOrig.replace("Original", "Diferenca3Coincidencias"), img3)
-	cv2.imwrite(nomeOrig.replace("Original", "Diferenca Real"), orig)
+if nomeOrig != nomeMod:
+	numTeste = int(nomeMod.replace("Imagens/Modificado ", "")[:-4])
+	cv2.imwrite(nomeMod.replace("Modificado", "Diferenca2Coincidencias"), img2)
+	cv2.imwrite(nomeMod.replace("Modificado", "Diferenca3Coincidencias"), img3)
+	cv2.imwrite(nomeMod.replace("Modificado", "Blocos2Coincidencias"), img2B)
+	cv2.imwrite(nomeMod.replace("Modificado", "Blocos3Coincidencias"), img3B)
+	cv2.imwrite(nomeMod.replace("Modificado", "Filtrado2Coincidencias"), img2C)
+	cv2.imwrite(nomeMod.replace("Modificado", "Filtrado3Coincidencias"), img3C)
+	cv2.imwrite(nomeMod.replace("Modificado", "Diferenca Real"), orig)
 
-	planilha = xlsx["Sheet1"]
+	planilha = xlsx["Modificados"]
 	planilha.cell(row = numTeste + 2, column = 1, value = numTeste)
 	planilha.cell(row = numTeste + 2, column = 2, value = recall2)
 	planilha.cell(row = numTeste + 2, column = 3, value = precisao2)
-	planilha.cell(row = numTeste + 2, column = 4, value = recall3)
-	planilha.cell(row = numTeste + 2, column = 5, value = precisao3)
+	planilha.cell(row = numTeste + 2, column = 4, value = copia2)
+	planilha.cell(row = numTeste + 2, column = 5, value = recall3)
+	planilha.cell(row = numTeste + 2, column = 6, value = precisao3)
+	planilha.cell(row = numTeste + 2, column = 7, value = copia3)
 else:
-	cv2.imwrite(nomeOrig.replace("Original", "Controle2Coincidencias"), img2)
-	cv2.imwrite(nomeOrig.replace("Original", "Controle3Coincidencias"), img3)
+	numTeste = int(nomeMod.replace("Imagens/Original ", "")[:-4])
+	cv2.imwrite(nomeOrig.replace("Original", "Controle2Coincidencias"), img2B)
+	cv2.imwrite(nomeOrig.replace("Original", "Controle3Coincidencias"), img3B)
+	cv2.imwrite(nomeOrig.replace("Original", "ControleFiltrado2Coincidencias"), img2C)
+	cv2.imwrite(nomeOrig.replace("Original", "ControleFiltrado3Coincidencias"), img3C)
 	
-	planilha = xlsx["Sheet2"]
+	planilha = xlsx["Originais"]
 	planilha.cell(row = numTeste + 2, column = 1, value = numTeste)
-	planilha.cell(row = numTeste + 2, column = 2, value = falsePos)
+	planilha.cell(row = numTeste + 2, column = 2, value = falsePos2)
+	planilha.cell(row = numTeste + 2, column = 3, value = copia2)
+	planilha.cell(row = numTeste + 2, column = 4, value = falsePos3)
+	planilha.cell(row = numTeste + 2, column = 5, value = copia3)
 xlsx.save("Resultados.xlsx")
